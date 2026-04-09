@@ -1,338 +1,344 @@
+const STORAGE_KEY = 'travel_order_app_v2';
+const RENDER_SCALE = 2;
 
-const STORAGE_KEY = "bneo_order_draft_v1";
+const monthNames = [
+  '', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+];
 
-function qs(id) { return document.getElementById(id); }
-function qsa(sel) { return Array.from(document.querySelectorAll(sel)); }
+const fields = [
+  'orderNumber','documentDate','expertName','basisType','basisNumber','basisDate','expertiseObject',
+  'address','departureDate','returnDate','departureTime','returnTime','otherTransport',
+  'carModel','carPlate','odometerStart','odometerEnd','totalMileage','fuelRate','fuelActual','fuelBrand',
+  'ticketRoute','tripCount','sumRub','sumKop','signExpert','signHead','signAccountant'
+];
 
-function toast(message) {  const el = qs("toast");
-  el.textContent = message;
-  el.hidden = false;
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => { el.hidden = true; }, 2600);
+const fileInput = document.getElementById('receipts');
+const fileList = document.getElementById('fileList');
+
+function byId(id) { return document.getElementById(id); }
+
+function getTransportValue() {
+  return document.querySelector('input[name="transportType"]:checked')?.value || '';
 }
 
-function collectData() {  const transport = document.querySelector('input[name="transportType"]:checked')?.value || "";
-  return {    orderNumber: qs("orderNumber").value.trim(),
-    compiledDate: qs("compiledDate").value,
-    expertFio: qs("expertFio").value.trim(),
-    basisType: qs("basisType").value,
-    basisNumber: qs("basisNumber").value.trim(),
-    basisDate: qs("basisDate").value,
-    objectDescription: qs("objectDescription").value.trim(),
-    address: qs("address").value.trim(),
-    departureDate: qs("departureDate").value,
-    departureTime: qs("departureTime").value,
-    returnDate: qs("returnDate").value,
-    returnTime: qs("returnTime").value,
-    transportType: transport,
-    transportOther: qs("transportOther").value.trim(),
-    carModel: qs("carModel").value.trim(),
-    carPlate: qs("carPlate").value.trim(),
-    odoOut: qs("odoOut").value.trim(),
-    odoIn: qs("odoIn").value.trim(),
-    totalMileage: qs("totalMileage").value.trim(),
-    fuelRate: qs("fuelRate").value.trim(),
-    fuelActual: qs("fuelActual").value.trim(),
-    fuelBrand: qs("fuelBrand").value.trim(),
-    ticketRoute: qs("ticketRoute").value.trim(),
-    tripCount: qs("tripCount").value.trim(),
-    totalAmount: qs("totalAmount").value.trim(),
-    totalNote: qs("totalNote").value.trim(),
-    expertSigner: qs("expertSigner").value.trim(),
-    managerSigner: qs("managerSigner").value.trim(),
-    accountantSigner: qs("accountantSigner").value.trim(),
-  };
+function setTransportValue(value) {
+  const radio = document.querySelector(`input[name="transportType"][value="${value}"]`);
+  if (radio) radio.checked = true;
 }
 
-function saveDraft(showNotice = true) {  localStorage.setItem(STORAGE_KEY, JSON.stringify(collectData()));
-  if (showNotice) toast("Черновик сохранён");
+function formatDateParts(value) {
+  if (!value) return {day: '___', month: '_____', year: '20___'};
+  const [year, month, day] = value.split('-');
+  const monthName = monthNames[Number(month)] || '_____';
+  return { day, month: monthName, year };
 }
 
-function loadDraft() {  const raw = localStorage.getItem(STORAGE_KEY);
+function readForm() {
+  const data = Object.fromEntries(fields.map(id => [id, byId(id)?.value?.trim?.() ?? '']));
+  data.transportType = getTransportValue();
+  data.receiptNames = Array.from(fileInput.files).map(file => file.name);
+  return data;
+}
+
+function saveDraft() {
+  const data = readForm();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadDraft() {
+  const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return;
-  try {    const data = JSON.parse(raw);
-    for (const [key, value] of Object.entries(data)) {      if (key === "transportType") continue;
-      const el = qs(key);
-      if (el && typeof value === "string") el.value = value;
+  try {
+    const data = JSON.parse(raw);
+    for (const id of fields) {
+      if (data[id] !== undefined && byId(id)) byId(id).value = data[id];
     }
-    if (data.transportType) {      const radio = document.querySelector(`input[name="transportType"][value="${data.transportType}"]`);
-      if (radio) radio.checked = true;
-    }
-    updateTransportUI();
-    updateMileage();
-  } catch (e) {    console.warn("Draft restore failed", e);
+    if (data.transportType) setTransportValue(data.transportType);
+    syncTransportBlocks();
+    renderFileList(data.receiptNames || []);
+  } catch (error) {
+    console.warn('Не удалось восстановить черновик', error);
   }
 }
 
-function clearDraft() {  localStorage.removeItem(STORAGE_KEY);
-  qs("orderForm").reset();
-  qsa('.transport-option').forEach(el => el.classList.remove('active'));
-  updateTransportUI();
-  renderReceiptList();
-  toast("Форма очищена");
+function clearDraft() {
+  localStorage.removeItem(STORAGE_KEY);
+  document.querySelectorAll('input, textarea, select').forEach(el => {
+    if (el.type === 'radio') {
+      el.checked = false;
+    } else if (el.type !== 'file') {
+      el.value = '';
+    }
+  });
+  fileInput.value = '';
+  renderFileList([]);
+  syncTransportBlocks();
 }
 
-function formatDateNumeric(value) {  if (!value) return "___";
-  const [y,m,d] = value.split("-");
-  if (!y || !m || !d) return value;
-  return `${d}.${m}.${y}`;
-}
-
-function formatDateQuoted(value) {  if (!value) return "«___» _____ 20___ г.";
-  const months = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
-  const [y,m,d] = value.split("-").map(v => parseInt(v, 10));
-  if (!y || !m || !d) return value;
-  return `«${String(d).padStart(2,"0")}» ${months[m-1]} ${y} г.`;
-}
-
-function valueOrLine(value, fallback = "___________________________") {  return value && String(value).trim() ? String(value).trim() : fallback;
-}
-
-function updateTransportUI() {  const selected = document.querySelector('input[name="transportType"]:checked')?.value || "";
-  qs("carBlock").classList.toggle("hidden", selected !== "car");
-  qs("publicBlock").classList.toggle("hidden", !(selected === "public" || selected === "taxi"));
-  qs("otherTransportWrap").classList.toggle("hidden", selected !== "other");
-
-  qsa('.transport-option').forEach(label => {    const input = label.querySelector('input');
-    label.classList.toggle('active', input && input.checked);
+function renderFileList(names) {
+  fileList.innerHTML = '';
+  if (!names.length) {
+    const li = document.createElement('li');
+    li.textContent = 'Файлы не выбраны';
+    fileList.appendChild(li);
+    return;
+  }
+  names.forEach(name => {
+    const li = document.createElement('li');
+    li.textContent = name;
+    fileList.appendChild(li);
   });
 }
 
-function updateMileage() {  const out = parseFloat(qs("odoOut").value);
-  const inn = parseFloat(qs("odoIn").value);
-  const totalEl = qs("totalMileage");
-  if (!Number.isNaN(out) && !Number.isNaN(inn) && inn >= out) {    totalEl.value = (Math.round((inn - out) * 100) / 100).toString();
+function syncTransportBlocks() {
+  const transport = getTransportValue();
+  byId('carCard').style.display = transport === 'car' ? '' : 'none';
+  byId('publicCard').style.display = (transport === 'public' || transport === 'taxi') ? '' : 'none';
+}
+
+function bindPreview(data) {
+  const docDate = formatDateParts(data.documentDate);
+  const basisDate = formatDateParts(data.basisDate);
+  const departureDate = formatDateParts(data.departureDate);
+  const returnDate = formatDateParts(data.returnDate);
+
+  const receiptLines = data.receiptNames.length
+    ? data.receiptNames.map((name, index) => `${index + 1}. ${name}`).join('\n')
+    : '—';
+
+  const mapping = {
+    ...data,
+    documentDateDay: docDate.day,
+    documentDateMonth: docDate.month,
+    documentDateYear: docDate.year,
+    basisDateDay: basisDate.day,
+    basisDateMonth: basisDate.month,
+    basisDateYear: basisDate.year,
+    departureDateDay: departureDate.day,
+    departureDateMonth: departureDate.month,
+    departureDateYear: departureDate.year,
+    returnDateDay: returnDate.day,
+    returnDateMonth: returnDate.month,
+    returnDateYear: returnDate.year,
+    markCar: data.transportType === 'car' ? '✓' : ' ',
+    markPublic: data.transportType === 'public' ? '✓' : ' ',
+    markTaxi: data.transportType === 'taxi' ? '✓' : ' ',
+    markOther: data.transportType === 'other' ? '✓' : ' ',
+    receiptList: receiptLines,
+    sumRub: data.sumRub || '0',
+    sumKop: (data.sumKop || '0').toString().padStart(2, '0'),
+    signExpert: data.signExpert || '_________',
+    signHead: data.signHead || '_________',
+    signAccountant: data.signAccountant || '_________',
+  };
+
+  document.querySelectorAll('[data-bind]').forEach(node => {
+    const key = node.getAttribute('data-bind');
+    node.textContent = mapping[key] || '_________';
+  });
+}
+
+async function renderDocPages(pdf) {
+  const pageNodes = [byId('docPage1'), byId('docPage2')];
+  for (let i = 0; i < pageNodes.length; i += 1) {
+    const canvas = await html2canvas(pageNodes[i], {
+      scale: RENDER_SCALE,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false,
+    });
+    const img = canvas.toDataURL('image/jpeg', 0.95);
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    if (i > 0) pdf.addPage();
+    pdf.addImage(img, 'JPEG', 0, 0, pageWidth, pageHeight);
   }
 }
 
-function renderReceiptList() {  const list = qs("receiptList");
-  const files = Array.from(qs("receipts").files || []);
-  if (!files.length) {    list.innerHTML = "";
-    return;
-  }
-  list.innerHTML = files.map(file => `<li>${escapeHtml(file.name)} · ${Math.max(1, Math.round(file.size / 1024))} КБ</li>`).join("");
+function fitSize(srcWidth, srcHeight, maxWidth, maxHeight) {
+  const ratio = Math.min(maxWidth / srcWidth, maxHeight / srcHeight);
+  return { width: srcWidth * ratio, height: srcHeight * ratio };
 }
 
-function escapeHtml(text) {  return String(text).replace(/[&<>"']/g, s => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[s]));
-}
-
-async function fileToDataUrl(file) {  return await new Promise((resolve, reject) => {    const reader = new FileReader();
+function readAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
 
-function toRubKop(value) {  const num = parseFloat(value || "0");
-  if (Number.isNaN(num)) return { rub: "0", kop: "00" };
-  const rub = Math.floor(num);
-  let kop = Math.round((num - rub) * 100);
-  if (kop === 100) {    return { rub: String(rub + 1), kop: "00" };
-  }
-  return { rub: String(rub), kop: String(kop).padStart(2, "0") };
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
 }
 
-async function buildPdf() {  const data = collectData();
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ unit: "mm", format: "a4" });
-  pdf.setProperties({    title: data.orderNumber ? `Наряд ${data.orderNumber}` : "Наряд на выезд эксперта",
-    subject: "Наряд-задание на выезд эксперта",
-    author: "BNEO SPOT",
-  });
+async function appendImageReceipt(pdf, file) {
+  const dataUrl = await readAsDataURL(file);
+  const img = await loadImage(dataUrl);
+  pdf.addPage();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const box = fitSize(img.width, img.height, pageWidth - 20, pageHeight - 20);
+  const x = (pageWidth - box.width) / 2;
+  const y = (pageHeight - box.height) / 2;
+  const format = file.type.includes('png') ? 'PNG' : 'JPEG';
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(12);
+  pdf.text(`Приложение: ${file.name}`, 10, 10);
+  pdf.addImage(dataUrl, format, x, Math.max(16, y), box.width, box.height);
+}
 
-  let y = 18;
-  const left = 18;
-  const contentWidth = 174;
-
-  function ensureSpace(height = 8) {    if (y + height > 280) {      pdf.addPage();
-      y = 18;
-    }
+async function appendPdfReceipt(pdf, file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfjsLib = globalThis.pdfjsLib;
+  if (!pdfjsLib) {
+    pdf.addPage();
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(12);
+    pdf.text(`Приложение PDF: ${file.name}`, 10, 20);
+    pdf.text('Не удалось отрендерить PDF в браузере.', 10, 30);
+    return;
   }
-
-  function setFont(style = "normal", size = 12) {    pdf.setFont("times", style);
-    pdf.setFontSize(size);
+  const source = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  for (let pageIndex = 1; pageIndex <= source.numPages; pageIndex += 1) {
+    const page = await source.getPage(pageIndex);
+    const viewport = page.getViewport({ scale: 1.6 });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const img = canvas.toDataURL('image/jpeg', 0.95);
+    pdf.addPage();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const box = fitSize(canvas.width, canvas.height, pageWidth - 20, pageHeight - 20);
+    const x = (pageWidth - box.width) / 2;
+    const y = (pageHeight - box.height) / 2;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(12);
+    pdf.text(`Приложение PDF: ${file.name} (стр. ${pageIndex})`, 10, 10);
+    pdf.addImage(img, 'JPEG', x, Math.max(16, y), box.width, box.height);
   }
+}
 
-  function writeLine(text, opts = {}) {    const { style = "normal", size = 12, gap = 6, indent = 0, align = "left" } = opts;
-    setFont(style, size);
-    const maxWidth = contentWidth - indent;
-    const lines = pdf.splitTextToSize(text, maxWidth);
-    ensureSpace(lines.length * gap + 2);
-    pdf.text(lines, left + indent, y, { align, maxWidth });
-    y += lines.length * gap;
-  }
-
-  function blockLabelValue(label, value, fallback = "___________________________", extraGap = 2) {    writeLine(`${label} ${valueOrLine(value, fallback)}`);
-    y += extraGap;
-  }
-
-  const checked = v => data.transportType === v ? "☑" : "☐";
-
-  setFont("bold", 14);
-  pdf.text(`НАРЯД-ЗАДАНИЕ НА ВЫЕЗД ЭКСПЕРТА № ${data.orderNumber || "___________"}`, 105, y, { align: "center" });
-  y += 10;
-
-  writeLine(`Дата составления: ${formatDateQuoted(data.compiledDate)}`, { gap: 6 });
-  y += 4;
-
-  writeLine("1. Информация об эксперте", { style: "bold" });
-  blockLabelValue("ФИО эксперта:", data.expertFio);
-  y += 3;
-
-  writeLine("2. Основание для выезда", { style: "bold" });
-  const basisLine = `${data.basisType || "Договор"} № ${data.basisNumber || "____"} от ${data.basisDate ? formatDateNumeric(data.basisDate) : "«__» _____ 20___ г."}`;
-  writeLine(basisLine);
-  writeLine("Объект экспертизы (краткое описание):", { gap: 6 });
-  writeLine(valueOrLine(data.objectDescription, "_________________________________________"), { indent: 4, gap: 6 });
-  y += 3;
-
-  writeLine("3. Место и сроки выезда", { style: "bold" });
-  writeLine("Адрес объекта (место проведения осмотра):");
-  writeLine(valueOrLine(data.address, "_________________________________________"), { indent: 4, gap: 6 });
-  blockLabelValue("Дата выезда:", data.departureDate ? formatDateNumeric(data.departureDate) : "");
-  blockLabelValue("Дата возвращения:", data.returnDate ? formatDateNumeric(data.returnDate) : "");
-  blockLabelValue("Время выезда:", data.departureTime || "___:___", "___:___");
-  blockLabelValue("Время возвращения:", data.returnTime || "___:___", "___:___");
-  y += 3;
-
-  writeLine("4. Вид транспорта и расчёт расходов", { style: "bold" });
-  writeLine("(нужное отметить ✓, заполнить соответствующие поля)", { size: 11 });
-  writeLine(`${checked("car")} Личный автомобиль    ${checked("public")} Общественный транспорт (поезд, автобус, метро)`, { gap: 6 });
-  writeLine(`${checked("taxi")} Такси    ${checked("other")} Иное: ${data.transportType === "other" ? valueOrLine(data.transportOther) : "________________"}`, { gap: 6 });
-  y += 3;
-
-  writeLine("4.1. При использовании личного автомобиля:", { style: "bold" });
-  blockLabelValue("Марка, модель:", data.carModel);
-  blockLabelValue("Гос. номер:", data.carPlate);
-  blockLabelValue("Показания одометра при выезде:", data.odoOut ? `${data.odoOut} км` : "");
-  blockLabelValue("Показания одометра при возвращении:", data.odoIn ? `${data.odoIn} км` : "");
-  blockLabelValue("Общий пробег:", data.totalMileage ? `${data.totalMileage} км` : "");
-  blockLabelValue("Норма расхода топлива (л/100 км):", data.fuelRate);
-  blockLabelValue("Фактический расход топлива согласно чекам:", data.fuelActual ? `${data.fuelActual} л` : "");
-  blockLabelValue("Марка топлива:", data.fuelBrand);
-  y += 2;
-
-  writeLine("4.2. При использовании общественного транспорта / такси:", { style: "bold" });
-  blockLabelValue("Вид билета / маршрут:", data.ticketRoute);
-  blockLabelValue("Количество поездок:", data.tripCount);
-  y += 3;
-
-  writeLine("5. Прилагаемые подтверждающие документы", { style: "bold" });
-  const files = Array.from(qs("receipts").files || []);
-  if (files.length) {    writeLine("Эксперт приложил следующие документы:", { gap: 6 });
-    files.forEach((file, index) => writeLine(`${index + 1}. ${file.name}`, { indent: 4, gap: 5.5 }));
-  } else {    writeLine("Эксперт обязан приложить к наряду оригиналы или копии документов, подтверждающих расходы.", { gap: 6 });
-  }
-  y += 3;
-
-  writeLine("6. Итоговая сумма к возмещению", { style: "bold" });
-  const money = toRubKop(data.totalAmount);
-  writeLine(`${money.rub} рублей ${money.kop} копеек${data.totalNote ? " — " + data.totalNote : ""}`, { gap: 6 });
-  y += 6;
-
-  const expertSigner = data.expertSigner || data.expertFio || "_________";
-  const managerSigner = data.managerSigner || "_________";
-  const accountantSigner = data.accountantSigner || "_________";
-  writeLine(`Эксперт / ${expertSigner} / ${data.compiledDate ? formatDateQuoted(data.compiledDate) : "«___» ____ 20___ г."}`, { gap: 6 });
-  writeLine("(ознакомлен, данные подтверждаю)", { size: 10, indent: 10, gap: 5 });
-  y += 2;
-  writeLine(`Руководитель / ${managerSigner} / ${data.compiledDate ? formatDateQuoted(data.compiledDate) : "«___» ____ 20___ г."}`, { gap: 6 });
-  writeLine("(утверждаю выезд)", { size: 10, indent: 10, gap: 5 });
-  y += 2;
-  writeLine(`Бухгалтер / ${accountantSigner} / ${data.compiledDate ? formatDateQuoted(data.compiledDate) : "«___» ____ 20___ г."}`, { gap: 6 });
-  writeLine("(проверил расчёт)", { size: 10, indent: 10, gap: 5 });
-
-  const nonImageFiles = [];
-  for (const file of files) {    if (file.type.startsWith("image/")) {      const url = await fileToDataUrl(file);
+async function appendUnsupportedReceiptList(pdf, files) {
+  if (!files.length) return;
+  pdf.addPage();
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(14);
+  pdf.text('Приложения в офисных форматах', 10, 20);
+  pdf.setFontSize(11);
+  let y = 34;
+  files.forEach((file, index) => {
+    const line = `${index + 1}. ${file.name}`;
+    pdf.text(line, 10, y);
+    y += 8;
+    if (y > 280 && index < files.length - 1) {
       pdf.addPage();
-      pdf.setFont("times", "bold");
-      pdf.setFontSize(12);
-      pdf.text(`Приложение: ${file.name}`, 18, 16);
-      const props = pdf.getImageProperties(url);
-      const pageW = 174;
-      const pageH = 255;
-      let w = pageW;
-      let h = props.height * (w / props.width);
-      if (h > pageH) {        h = pageH;
-        w = props.width * (h / props.height);
-      }
-      const x = 18 + (pageW - w) / 2;
-      const yImg = 22 + (pageH - h) / 2;
-      const fmt = (file.type.includes("png") ? "PNG" : "JPEG");
-      pdf.addImage(url, fmt, x, yImg, w, h, undefined, "FAST");
-    } else {      nonImageFiles.push(file);
+      y = 20;
     }
-  }
-
-  if (nonImageFiles.length) {    pdf.addPage();
-    y = 18;
-    setFont("bold", 13);
-    pdf.text("Приложение: файлы, не встроенные в PDF", 18, y);
-    y += 10;
-    setFont("normal", 12);
-    const note = "Следующие файлы были выбраны в форме, но не могут быть встроены как изображения. Их наименования перечислены ниже:";
-    const lines = pdf.splitTextToSize(note, 174);
-    pdf.text(lines, 18, y);
-    y += lines.length * 6 + 2;
-    nonImageFiles.forEach((file, idx) => {      const desc = `${idx + 1}. ${file.name}`;
-      const wrapped = pdf.splitTextToSize(desc, 174);
-      if (y + wrapped.length * 6 > 280) { pdf.addPage(); y = 18; }
-      pdf.text(wrapped, 18, y);
-      y += wrapped.length * 6 + 2;
-    });
-  }
-
-  return pdf;
+  });
+  pdf.text('В браузерной версии содержимое DOC/DOCX/XLS/XLSX не встраивается как изображение.', 10, Math.min(y + 10, 286));
 }
 
-async function downloadPdf() {  try {    if (!window.jspdf || !window.jspdf.jsPDF) {      throw new Error("jsPDF не загрузился");
-    }
-    const pdf = await buildPdf();
-    const data = collectData();
-    const filename = `travel_order_${(data.orderNumber || "draft").replace(/[^\w\-а-яА-Я]+/g, "_")}.pdf`;
+async function buildPdf() {
+  const { jsPDF } = window.jspdf;
+  const data = readForm();
+  bindPreview(data);
+
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  await renderDocPages(pdf);
+
+  const files = Array.from(fileInput.files);
+  const images = files.filter(file => file.type.startsWith('image/'));
+  const pdfFiles = files.filter(file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
+  const officeFiles = files.filter(file => !file.type.startsWith('image/') && !(file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')));
+
+  for (const file of images) {
+    await appendImageReceipt(pdf, file);
+  }
+  for (const file of pdfFiles) {
+    await appendPdfReceipt(pdf, file);
+  }
+  await appendUnsupportedReceiptList(pdf, officeFiles);
+
+  return { pdf, data };
+}
+
+async function downloadPdf() {
+  const button = byId('downloadPdfBtn');
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Собираю PDF...';
+  try {
+    const { pdf, data } = await buildPdf();
+    const filename = `travel_order_${data.orderNumber || 'без_номера'}.pdf`;
     pdf.save(filename);
-    saveDraft(false);
-    toast("PDF сформирован");
-  } catch (err) {    console.error(err);
-    toast("Не удалось сформировать PDF");
+  } catch (error) {
+    console.error(error);
+    alert('Не удалось собрать PDF. Откройте консоль браузера и пришлите ошибку.');
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
   }
 }
 
-function bindEvents() {  qsa('input[name="transportType"]').forEach(input => {    input.addEventListener('change', () => {      updateTransportUI();
-      persistSilently();
+function attachEvents() {
+  document.querySelectorAll('input, textarea, select').forEach(el => {
+    if (el.type === 'file') return;
+    el.addEventListener('input', saveDraft);
+    el.addEventListener('change', saveDraft);
+  });
+  document.querySelectorAll('input[name="transportType"]').forEach(el => {
+    el.addEventListener('change', () => {
+      syncTransportBlocks();
+      saveDraft();
     });
   });
-
-  qsa('input, textarea, select').forEach(el => {    if (el.type !== 'file') {      el.addEventListener('input', persistSilently);
-      el.addEventListener('change', persistSilently);
-    }
+  fileInput.addEventListener('change', () => {
+    renderFileList(Array.from(fileInput.files).map(file => file.name));
   });
-
-  qs("odoOut").addEventListener("input", updateMileage);
-  qs("odoIn").addEventListener("input", updateMileage);
-  qs("receipts").addEventListener("change", renderReceiptList);
-
-  ["saveDraftBtn", "saveDraftBtnBottom"].forEach(id => qs(id).addEventListener("click", () => saveDraft(true)));
-  ["clearBtn", "clearBtnBottom"].forEach(id => qs(id).addEventListener("click", clearDraft));
-  ["downloadBtn", "downloadBtnBottom"].forEach(id => qs(id).addEventListener("click", downloadPdf));
+  byId('restoreDraftBtn').addEventListener('click', loadDraft);
+  byId('clearDraftBtn').addEventListener('click', clearDraft);
+  byId('downloadPdfBtn').addEventListener('click', downloadPdf);
 }
 
-let persistTimer = null;
-function persistSilently() {  clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => saveDraft(false), 120);
-}
-
-function initTelegram() {  const tg = window.Telegram && window.Telegram.WebApp;
-  if (!tg) return;
-  try {    tg.ready();
-    tg.expand();
-  } catch (e) {    console.warn("Telegram init failed", e);
+async function initPdfJs() {
+  try {
+    const module = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.mjs');
+    globalThis.pdfjsLib = module;
+    module.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.mjs';
+  } catch (error) {
+    console.warn('pdf.js не загрузился', error);
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {  initTelegram();
-  bindEvents();
+function presetToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  ['documentDate', 'basisDate', 'departureDate', 'returnDate'].forEach(id => {
+    if (!byId(id).value) byId(id).value = today;
+  });
+  if (!getTransportValue()) setTransportValue('public');
+  syncTransportBlocks();
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  attachEvents();
+  presetToday();
   loadDraft();
-  renderReceiptList();
-  updateTransportUI();
+  syncTransportBlocks();
+  renderFileList([]);
+  await initPdfJs();
+  if (window.Telegram?.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+  }
 });
