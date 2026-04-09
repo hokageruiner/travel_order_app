@@ -1,1 +1,46 @@
-<html><body><h1>Order App PRO</h1></body></html>
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Наряд</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+<div class="card">
+<h2>Наряд</h2>
+
+<input id="fio" placeholder="ФИО эксперта">
+<input id="object" placeholder="Объект">
+
+<select id="basis_type">
+<option>Договор</option>
+<option>Заявка</option>
+<option>Постановление</option>
+</select>
+
+<input id="basis_number" placeholder="№">
+<input id="basis_date" placeholder="от">
+
+<h3>Транспорт</h3>
+
+<label><input type="radio" name="transport" value="car"> Авто</label>
+<label><input type="radio" name="transport" value="public"> Общественный</label>
+<label><input type="radio" name="transport" value="taxi"> Такси</label>
+
+<div id="car_block" style="display:none;">
+<input id="car_model" placeholder="Марка">
+<input id="car_number" placeholder="Гос номер">
+</div>
+
+<input type="file" id="receipts" multiple accept="image/*">
+
+<button onclick="sendOrder()">Отправить</button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
