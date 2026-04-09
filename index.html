@@ -1,46 +1,245 @@
-
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>Наряд</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Наряд на выезд эксперта</title>
+  <meta name="theme-color" content="#0f172a">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
-
 <body>
-<div class="card">
-<h2>Наряд</h2>
+  <div class="page">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">BNEO SPOT</div>
+        <h1>Наряд на выезд эксперта</h1>
+        <p>Форма повторяет служебный бланк: основание, объект, адрес, транспорт, расходы, приложения и итоговую сумму.</p>
+      </div>
+      <div class="hero-badge">PDF</div>
+    </header>
 
-<input id="fio" placeholder="ФИО эксперта">
-<input id="object" placeholder="Объект">
+    <div class="action-bar top-actions">
+      <button class="secondary" id="saveDraftBtn" type="button">Сохранить черновик</button>
+      <button class="secondary" id="clearBtn" type="button">Очистить</button>
+      <button class="primary" id="downloadBtn" type="button">Скачать PDF</button>
+    </div>
 
-<select id="basis_type">
-<option>Договор</option>
-<option>Заявка</option>
-<option>Постановление</option>
-</select>
+    <form id="orderForm" class="stack">
+      <section class="card">
+        <h2>Общие сведения</h2>
+        <div class="grid two">
+          <label>
+            <span>Номер наряда</span>
+            <input id="orderNumber" name="orderNumber" type="text" placeholder="0236К-2026">
+          </label>
+          <label>
+            <span>Дата составления</span>
+            <input id="compiledDate" name="compiledDate" type="date">
+          </label>
+        </div>
+      </section>
 
-<input id="basis_number" placeholder="№">
-<input id="basis_date" placeholder="от">
+      <section class="card">
+        <h2>1. Информация об эксперте</h2>
+        <label>
+          <span>ФИО эксперта</span>
+          <input id="expertFio" name="expertFio" type="text" placeholder="Иванов Иван Иванович">
+        </label>
+      </section>
 
-<h3>Транспорт</h3>
+      <section class="card">
+        <h2>2. Основание для выезда</h2>
+        <div class="grid three">
+          <label>
+            <span>Основание</span>
+            <select id="basisType" name="basisType">
+              <option value="Договор">Договор</option>
+              <option value="Заявка">Заявка</option>
+              <option value="Постановление">Постановление</option>
+            </select>
+          </label>
+          <label>
+            <span>№</span>
+            <input id="basisNumber" name="basisNumber" type="text" placeholder="1687">
+          </label>
+          <label>
+            <span>от</span>
+            <input id="basisDate" name="basisDate" type="date">
+          </label>
+        </div>
+        <label>
+          <span>Объект экспертизы (краткое описание)</span>
+          <textarea id="objectDescription" name="objectDescription" rows="4" placeholder="Квартира после залития, осмотр помещения и отделки."></textarea>
+        </label>
+      </section>
 
-<label><input type="radio" name="transport" value="car"> Авто</label>
-<label><input type="radio" name="transport" value="public"> Общественный</label>
-<label><input type="radio" name="transport" value="taxi"> Такси</label>
+      <section class="card">
+        <h2>3. Место и сроки выезда</h2>
+        <label>
+          <span>Адрес объекта (место проведения осмотра)</span>
+          <textarea id="address" name="address" rows="3" placeholder="г. Калининград, ул. ..."></textarea>
+        </label>
+        <div class="grid four">
+          <label>
+            <span>Дата выезда</span>
+            <input id="departureDate" name="departureDate" type="date">
+          </label>
+          <label>
+            <span>Время выезда</span>
+            <input id="departureTime" name="departureTime" type="time">
+          </label>
+          <label>
+            <span>Дата возвращения</span>
+            <input id="returnDate" name="returnDate" type="date">
+          </label>
+          <label>
+            <span>Время возвращения</span>
+            <input id="returnTime" name="returnTime" type="time">
+          </label>
+        </div>
+      </section>
 
-<div id="car_block" style="display:none;">
-<input id="car_model" placeholder="Марка">
-<input id="car_number" placeholder="Гос номер">
-</div>
+      <section class="card">
+        <h2>4. Вид транспорта и расчёт расходов</h2>
+        <p class="section-note">(нужное отметить ✓, заполнить соответствующие поля)</p>
 
-<input type="file" id="receipts" multiple accept="image/*">
+        <div class="transport-grid" role="radiogroup" aria-label="Вид транспорта">
+          <label class="transport-option">
+            <input type="radio" name="transportType" value="car">
+            <span>Личный автомобиль</span>
+          </label>
+          <label class="transport-option">
+            <input type="radio" name="transportType" value="public">
+            <span>Общественный транспорт</span>
+          </label>
+          <label class="transport-option">
+            <input type="radio" name="transportType" value="taxi">
+            <span>Такси</span>
+          </label>
+          <label class="transport-option">
+            <input type="radio" name="transportType" value="other">
+            <span>Иное</span>
+          </label>
+        </div>
 
-<button onclick="sendOrder()">Отправить</button>
-</div>
+        <div id="otherTransportWrap" class="hidden">
+          <label>
+            <span>Иное</span>
+            <input id="transportOther" name="transportOther" type="text" placeholder="Укажите вид транспорта">
+          </label>
+        </div>
 
-<script src="app.js"></script>
+        <div id="carBlock" class="subcard hidden">
+          <h3>4.1. При использовании личного автомобиля</h3>
+          <div class="grid two">
+            <label>
+              <span>Марка, модель</span>
+              <input id="carModel" name="carModel" type="text" placeholder="Lada Vesta">
+            </label>
+            <label>
+              <span>Гос. номер</span>
+              <input id="carPlate" name="carPlate" type="text" placeholder="А123АА39">
+            </label>
+          </div>
+          <div class="grid four">
+            <label>
+              <span>Одометр при выезде, км</span>
+              <input id="odoOut" name="odoOut" type="number" inputmode="decimal" placeholder="10000">
+            </label>
+            <label>
+              <span>Одометр при возвращении, км</span>
+              <input id="odoIn" name="odoIn" type="number" inputmode="decimal" placeholder="10125">
+            </label>
+            <label>
+              <span>Общий пробег, км</span>
+              <input id="totalMileage" name="totalMileage" type="number" inputmode="decimal" placeholder="125">
+            </label>
+            <label>
+              <span>Норма расхода, л/100 км</span>
+              <input id="fuelRate" name="fuelRate" type="number" inputmode="decimal" step="0.1" placeholder="8.5">
+            </label>
+          </div>
+          <div class="grid two">
+            <label>
+              <span>Фактический расход по чекам, л</span>
+              <input id="fuelActual" name="fuelActual" type="number" inputmode="decimal" step="0.01" placeholder="11.2">
+            </label>
+            <label>
+              <span>Марка топлива</span>
+              <input id="fuelBrand" name="fuelBrand" type="text" placeholder="АИ-95">
+            </label>
+          </div>
+        </div>
+
+        <div id="publicBlock" class="subcard hidden">
+          <h3>4.2. При использовании общественного транспорта / такси</h3>
+          <div class="grid two">
+            <label>
+              <span>Вид билета / маршрут</span>
+              <input id="ticketRoute" name="ticketRoute" type="text" placeholder="Автобус 104 / билет 2 поездки">
+            </label>
+            <label>
+              <span>Количество поездок</span>
+              <input id="tripCount" name="tripCount" type="number" inputmode="numeric" placeholder="2">
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>5. Прилагаемые подтверждающие документы</h2>
+        <label>
+          <span>Файлы чеков и подтверждающих документов</span>
+          <input id="receipts" name="receipts" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+        </label>
+        <p class="hint">Текстовые поля сохраняются как черновик. Файлы браузер не сохраняет автоматически — их нужно выбрать заново после перезагрузки.</p>
+        <ul id="receiptList" class="file-list"></ul>
+      </section>
+
+      <section class="card">
+        <h2>6. Итоговая сумма к возмещению</h2>
+        <div class="grid two">
+          <label>
+            <span>Сумма, ₽</span>
+            <input id="totalAmount" name="totalAmount" type="number" inputmode="decimal" step="0.01" placeholder="3000.00">
+          </label>
+          <label>
+            <span>Примечание к сумме</span>
+            <input id="totalNote" name="totalNote" type="text" placeholder="По чекам и билетам">
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Подписи</h2>
+        <div class="grid three">
+          <label>
+            <span>Эксперт</span>
+            <input id="expertSigner" name="expertSigner" type="text" placeholder="Иванов И.И.">
+          </label>
+          <label>
+            <span>Руководитель</span>
+            <input id="managerSigner" name="managerSigner" type="text" placeholder="Петров П.П.">
+          </label>
+          <label>
+            <span>Бухгалтер</span>
+            <input id="accountantSigner" name="accountantSigner" type="text" placeholder="Сидорова А.А.">
+          </label>
+        </div>
+      </section>
+
+      <div class="action-bar bottom-actions">
+        <button class="secondary" id="saveDraftBtnBottom" type="button">Сохранить черновик</button>
+        <button class="secondary" id="clearBtnBottom" type="button">Очистить</button>
+        <button class="primary" id="downloadBtnBottom" type="button">Скачать PDF</button>
+      </div>
+    </form>
+
+    <div id="toast" class="toast" hidden></div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
