@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Наряд-задание на выезд эксперта</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <main class="wrap">
+    <header class="page-head">
+      <div>
+        <h1>Наряд-задание на выезд эксперта</h1>
+        <p class="muted">Заполните форму. PDF соберётся сразу с вашими данными, а фото чеков добавятся отдельными страницами.</p>
+      </div>
+      <div class="head-actions">
+        <button type="button" class="ghost" id="restoreDraft">Восстановить черновик</button>
+        <button type="button" class="ghost" id="clearForm">Очистить</button>
+        <button type="button" id="downloadPdf">Скачать PDF</button>
+      </div>
+    </header>
+
+    <form id="orderForm" class="form-grid">
+      <section class="card section-grid">
+        <h2>Шапка документа</h2>
+        <label>№ наряда<input name="order_number" placeholder="Например, 15/2026"></label>
+        <label>Дата составления<input type="date" name="created_date"></label>
+      </section>
+
+      <section class="card section-grid">
+        <h2>1. Информация об эксперте</h2>
+        <label class="full">ФИО эксперта<input name="expert_name" placeholder="Фамилия Имя Отчество"></label>
+      </section>
+
+      <section class="card section-grid">
+        <h2>2. Основание для выезда</h2>
+        <label>Основание
+          <select name="basis_type">
+            <option value="Договор">Договор</option>
+            <option value="Заявка">Заявка</option>
+            <option value="Постановление">Постановление</option>
+          </select>
+        </label>
+        <label>№<input name="basis_number" placeholder="Номер документа"></label>
+        <label>от<input type="date" name="basis_date"></label>
+        <label class="full">Объект экспертизы (краткое описание)
+          <textarea name="object_desc" placeholder="Краткое описание объекта экспертизы"></textarea>
+        </label>
+      </section>
+
+      <section class="card section-grid">
+        <h2>3. Место и сроки выезда</h2>
+        <label class="full">Адрес объекта (место проведения осмотра)
+          <textarea name="address" placeholder="Полный адрес объекта"></textarea>
+        </label>
+        <label>Дата выезда<input type="date" name="departure_date"></label>
+        <label>Дата возвращения<input type="date" name="return_date"></label>
+        <label>Время выезда<input type="time" name="departure_time"></label>
+        <label>Время возвращения<input type="time" name="return_time"></label>
+      </section>
+
+      <section class="card section-grid">
+        <h2>4. Вид транспорта и расчёт расходов</h2>
+        <p class="muted full">Отметьте нужный вариант галочкой и заполните соответствующие поля.</p>
+        <div class="transport-choices full" role="group" aria-label="Вид транспорта">
+          <label class="choice"><input type="radio" name="transport_type" value="Личный автомобиль" checked> <span>Личный автомобиль</span></label>
+          <label class="choice"><input type="radio" name="transport_type" value="Общественный транспорт"> <span>Общественный транспорт (поезд, автобус, метро)</span></label>
+          <label class="choice"><input type="radio" name="transport_type" value="Такси"> <span>Такси</span></label>
+          <label class="choice"><input type="radio" name="transport_type" value="Иное"> <span>Иное</span></label>
+        </div>
+        <label class="full" id="otherTransportWrap">Иное: <input name="transport_other" placeholder="Укажите иной вид транспорта"></label>
+      </section>
+
+      <section class="card section-grid" id="carFields">
+        <h2>4.1. При использовании личного автомобиля</h2>
+        <label>Марка, модель<input name="car_model"></label>
+        <label>Гос. номер<input name="car_plate"></label>
+        <label>Показания одометра при выезде, км<input name="odo_start" inputmode="decimal"></label>
+        <label>Показания одометра при возвращении, км<input name="odo_end" inputmode="decimal"></label>
+        <label>Общий пробег, км<input name="distance_total" inputmode="decimal"></label>
+        <label>Норма расхода топлива, л/100 км<input name="fuel_norm" inputmode="decimal"></label>
+        <label>Фактический расход топлива по чекам, л<input name="fuel_actual" inputmode="decimal"></label>
+        <label>Марка топлива<input name="fuel_brand"></label>
+      </section>
+
+      <section class="card section-grid" id="publicFields">
+        <h2>4.2. При использовании общественного транспорта / такси</h2>
+        <label class="full">Вид билета / маршрут<input name="route_ticket"></label>
+        <label>Количество поездок<input name="trips_count" inputmode="numeric"></label>
+      </section>
+
+      <section class="card section-grid">
+        <h2>5. Прилагаемые подтверждающие документы</h2>
+        <p class="muted full">Добавьте фото чеков или иных подтверждающих документов. Они будут приложены к PDF отдельными страницами.</p>
+        <label class="full">Фото чеков
+          <input type="file" id="receipts" accept="image/*" multiple>
+        </label>
+        <div id="receiptPreview" class="preview-grid full"></div>
+      </section>
+
+      <section class="card section-grid">
+        <h2>6. Итоговая сумма к возмещению</h2>
+        <label>Рубли<input name="total_rubles" inputmode="numeric"></label>
+        <label>Копейки<input name="total_kopecks" inputmode="numeric" maxlength="2" placeholder="00"></label>
+      </section>
+    </form>
+
+    <section id="pdfRoot" class="pdf-root"></section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
